@@ -30,11 +30,12 @@ export class UserService {
     if (isUserInDb) {
       throw new HttpException('User already exists !', HttpStatus.BAD_REQUEST);
     }
-    return await this.userRepository.create(userDto);
+    return await this.userRepository.save({ ...userDto });
   };
 
   findByLogin = async (loginUserDto: LoginUserDto) => {
     const { email, password } = loginUserDto;
+
     //check exists
     const user = await this.userRepository.findOneBy({
       email: email,
@@ -44,11 +45,12 @@ export class UserService {
       throw new HttpException('User not found !', HttpStatus.UNAUTHORIZED);
     }
 
-    const isPasswordDone = bcrypt.compare(password, user.password);
+    const isPasswordDone = await bcrypt.compare(password, user.password);
 
-    if (isPasswordDone) {
+    if (!isPasswordDone) {
       throw new HttpException('Invalid credential !', HttpStatus.UNAUTHORIZED);
     }
+
     return user;
   };
 
@@ -56,18 +58,23 @@ export class UserService {
     return await this.userRepository.findOneBy({ email: email });
   };
 
-  update = async (user: User, newRefreshToken) => {
+  update = async (email: string, newRefreshToken) => {
     if (newRefreshToken) {
-      newRefreshToken = bcrypt.hash(this._reverse(newRefreshToken), 10);
+      newRefreshToken = await bcrypt.hash(this._reverse(newRefreshToken), 10);
     }
-    return await this.userRepository.update(
-      { email: user.email },
-      { refreshToken: newRefreshToken },
-    );
+    const user = await this.userRepository.findOneBy({
+      email: email,
+    });
+
+    return await this.userRepository.save({
+      ...user,
+      refreshToken: newRefreshToken,
+    });
   };
 
-  getUserByRefreshToken = async (refreshToken, email) => {
+  getUserByRefreshToken = async (email: string, refreshToken) => {
     const user: User = await this.findByEmail(email);
+
     if (!user) {
       throw new HttpException('Invalid token !', HttpStatus.UNAUTHORIZED);
     }
